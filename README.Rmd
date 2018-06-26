@@ -12,7 +12,7 @@ This repository functions mainly to host a dockerfile to facilitate course repro
 
 ## Docker
 
-This repository contains a docker file based on the [`rocker\tidyverse`](https://hub.docker.com/r/rocker/tidyverse/) docker image, locked to R version `3.5.0`. Packages are downloaded from an MRAN CRAN snapshot. Run the following in the command line to pull and run the container.
+This repository contains a docker file based on the [`rocker\tidyverse`](https://hub.docker.com/r/rocker/tidyverse/) docker image, locked to R version `3.5.0`. Packages are downloaded from an MRAN CRAN snapshot. Run the following in the command line (with an active [docker](https://docs.docker.com/install/) installation running) to pull and run the container.
 
 ```{r bash, eval = FALSE}
 ## Pull the container
