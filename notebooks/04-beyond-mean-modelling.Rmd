@@ -1,0 +1,11 @@
+---
+title: "Beyond mean modelling: GAMLSS models"
+output: html_notebook
+---
+
+# Intro to GAMS for location and scale
+
+- Can model both the mean and variance based on the covariates.
+- Effectively fit a list of models
+- This is useful so that you can model the whole distribution. For example with predictions
+- Accuracy of the fit can also be improved if the weight of each obsercation is inversely proportion to the variance.

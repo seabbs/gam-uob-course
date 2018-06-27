@@ -1,0 +1,190 @@
+---
+title: "Afternoon practical session"
+output: html_notebook
+---
+
+
+# GAMLSS modelling of aggregate UK electricity demand
+
+- get the data and run a baseline GAM model
+
+
+```{r}
+library(mgcViz); library(gridExtra)
+data("UKload")
+
+form <- NetDemand~s(wM,k=20,bs='cr') + s(wM_s95,k=20,bs='cr') + 
+        s(Posan, k=30, bs = "cc") + Dow + s(Trend,k=4,bs='cr') + 
+        NetDemand.48 + Holy
+
+fit0 <- gamV(form, data = UKload, aViz = list(nsim = 50)) 
+```
+
+- Look for patterns in the residuals conditional mean
+
+```{r}
+pl <- list()
+pl[[1]] <- ( check1D(fit0, "wM") + l_gridCheck1D(gridFun = mean, stand = "sc") )$ggObj      # OK
+pl[[2]] <- ( check1D(fit0, "wM_s95") + l_gridCheck1D(gridFun = mean, stand = "sc") )$ggObj  # OK
+pl[[3]] <- ( check1D(fit0, "Posan") + l_gridCheck1D(gridFun = mean, stand = "sc") )$ggObj   # Not OK
+
+grid.arrange(grobs = pl, ncol = 2)
+```
+
+- `Posan` has large absolute residuals in January and December, indicating that the cyclic smoothing may not be correct.
+
+- Drop cyclic smoothing and recheck.
+
+```{r}
+form <- NetDemand ~ s(wM,k=20,bs='cr') + 
+                    s(wM_s95,k=20,bs='cr') + 
+                    s(Posan,bs='cr',k=30) +  # <- Changed `cc` to `cr`
+                    Dow + s(Trend,k=4) + NetDemand.48 + Holy
+
+fit1 <- gamV(form, data = UKload, aViz = list(nsim = 50)) 
+
+# Pattern in residuals mean is gone!
+check1D(fit1, "Posan") + l_gridCheck1D(gridFun = mean)
+```
+
+- Check the AIC
+
+```{r}
+AIC(fit0, fit1)
+```
+
+- Look at variable plots
+
+```{r}
+print(plot(fit1), pages = 1)
+```
+
+- Check the basis dimension basis
+
+```{r}
+tmp <- check(fit1)
+```
+
+- The `check` test indicates that k may be too low. Plotting the effect indicates that it drops sharply in December. 
+
+- Fit a model with adaptive smoothing.
+
+```{r}
+form <- NetDemand ~ s(wM,k=20,bs='cr') + 
+                    s(wM_s95,k=20,bs='cr') + 
+                    s(Posan,bs='ad',k=30) +  # <- Changed `cr` to `ad`
+                    Dow + s(Trend,k=4) + NetDemand.48 + Holy
+fit2 <- gamV(form, data = UKload, aViz = list(nsim = 50)) 
+
+AIC( fit1, fit2 )
+```
+
+- Plot the effect of `posan`
+
+```{r}
+plot(sm(fit2, 3), n = 400) + l_points() + l_fitLine() + l_ciLine() + theme_minimal()
+```
+
+- Now the mean model is finalised we can look at the conditional variance of residuals. Using density plots is helpful as it avoids just looking at the mean distribution.
+
+```{r}
+pl <- list()
+pl[[1]] <- ( check1D(fit2, "wM") + l_densCheck(n = c(100, 100), tol = -1) )$ggObj
+pl[[2]] <- ( check1D(fit2, "wM_s95") + l_densCheck(n = c(100, 100), tol = -1) )$ggObj
+pl[[3]] <- ( check1D(fit2, "Posan") + l_densCheck(n = c(100, 100), tol = -1) )$ggObj
+
+grid.arrange(grobs = pl, ncol = 2) 
+```
+
+- Some evidence of overdispersion check again using standardised plots
+
+```{r}
+pl <- list()
+pl[[1]] <- ( check1D(fit2, "wM") + l_gridCheck1D(gridFun = sd, stand = "sc") )$ggObj
+pl[[2]] <- ( check1D(fit2, "wM_s95") + l_gridCheck1D(gridFun = sd, stand = "sc") )$ggObj
+pl[[3]] <- ( check1D(fit2, "Posan") + l_gridCheck1D(gridFun = sd, stand = "sc") )$ggObj
+
+grid.arrange(grobs = pl, ncol = 2) # More evidence of heteroscedasticity
+```
+
+- All three variables having variable varinace. This could be addressed by fitting a GAMLSS model with variable scale. 
+
+```{r}
+form <- list(NetDemand ~ s(wM,k=20,bs='cr') + 
+             s(wM_s95,k=20,bs='cr') + 
+             s(Posan,bs='ad',k=30) + 
+             Dow + s(Trend,k=4) + NetDemand.48 + Holy, 
+             ~ s(wM_s95,k=10,bs='cr') + 
+               s(Posan,bs='cr',k=20) + 
+               Dow)
+
+fit3 <- gamV(form, family = gaulss, data = UKload, aViz = list(nsim = 50))
+
+AIC(fit2, fit3) 
+```
+
+- AIC has improved now check the variance.
+
+```{r}
+pl <- list()
+pl[[1]] <- ( check1D(fit3, "wM") + l_gridCheck1D(gridFun = sd, stand = "sc") )$ggObj
+pl[[2]] <- ( check1D(fit3, "wM_s95") + l_gridCheck1D(gridFun = sd, stand = "sc") )$ggObj
+pl[[3]] <- ( check1D(fit3, "Posan") + l_gridCheck1D(gridFun = sd, stand = "sc") )$ggObj
+
+grid.arrange(grobs = pl, ncol = 2) 
+```
+
+- Variance is reduced, relative to the location only Gaussian model. Now check skewness.
+
+```{r}
+qq(fit3)
+```
+
+- Fat tails and skewness to the left. Explore how this changes across covariates.
+
+```{r}
+library(e1071)
+pl <- list()
+pl[[1]] <- ( check1D(fit3, "wM_s95") + l_gridCheck1D(gridFun = skewness, stand = "sc") )$ggObj
+pl[[2]] <- ( check1D(fit3, "Posan") + l_gridCheck1D(gridFun = skewness, stand = "sc") )$ggObj
+
+grid.arrange(grobs = pl, ncol = 2)
+```
+
+- Residuals show departures from Guassian model based estimates (i.e response is symmetric). Fit a shash model to allow for skewed response
+
+```{r}
+library(mgcFam)
+form <- list(NetDemand ~ s(wM,k=20,bs='cr') + 
+               s(wM_s95,k=20,bs='cr') + 
+               s(Posan,bs='ad',k=30) + 
+               s(Trend,k=4) + NetDemand.48 + Holy + Dow, 
+             ~ s(wM_s95,k=10,bs='cr') + 
+               s(Posan,bs='cr',k=20) + 
+               Dow, 
+             ~ s(Posan, k = 10, bs='cr') + Dow, 
+             ~ 1) # If convergence problems arise use
+                  # ~ -1 + s(Holy, bs = "re", sp = 1e6) in place of ~ 1
+
+fit4 <- gamV(form, family = shash, data = UKload, 
+             aViz = list(nsim = 50))
+
+AIC(fit3, fit4) # Decreased again by a lot
+```
+
+There is a clear improvement. Now recheck skewness.
+
+```{r}
+pl <- list()
+pl[[1]] <- ( check1D(fit4, "wM_s95") + l_gridCheck1D(gridFun = skewness, stand = "sc") )$ggObj
+pl[[2]] <- ( check1D(fit4, "Posan") + l_gridCheck1D(gridFun = skewness, stand = "sc") )$ggObj
+
+grid.arrange(grobs = pl, ncol = 2) 
+```
+
+```{r}
+print(plot(fit4, allTerms = TRUE), pages = 2, ask = F)
+```
+
+# Body Mass Index (BMI) of Dutch Boys
+
