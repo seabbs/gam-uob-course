@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This repository functions mainly to host a dockerfile to facilitate course reproducibility for personal use. It also contains my personal notebooks and notes from the course. Feel free to make use of the provided docker container.
 
+The `workshop_JGI_2018` folder containers the course lectures, walkthroughs, excercises and solutions as found at [https://github.com/mfasiolo/workshop_JGI_2018](https://github.com/mfasiolo/workshop_JGI_2018)
 ## Docker
 
 This repository contains a docker file based on the [`rocker\tidyverse`](https://hub.docker.com/r/rocker/tidyverse/) docker image, locked to R version `3.5.0`. Packages are downloaded from an MRAN CRAN snapshot. Run the following in the command line (with an active [docker](https://docs.docker.com/install/) installation running) to pull and run the container.
