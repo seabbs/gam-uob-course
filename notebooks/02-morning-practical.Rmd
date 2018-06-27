@@ -1,0 +1,221 @@
+---
+title: "Morning Practical"
+output: html_notebook
+---
+
+# Ozone Modelling
+
+- Get the data
+
+```{r get-ozone}
+ozone <- read.table("../workshop_JGI_2018/exercises/data/ozone.txt")
+```
+
+- Look at the data
+
+```{r look-at-ozone}
+pairs(ozone)
+```
+
+- Load required packages
+
+```{r packages}
+library(mgcViz)
+```
+
+- Fit a Gaussian GAM with 03 as a response, where log(E(03)) is given by the sum of smooth functions
+
+```{r fit-ozone}
+ozone_gam <- gamV(O3 ~ s(vh) + s(wind) + s(humidity) + s(temp) + s(ibh) + s(dpg) + s(ibt) + s(vis) + s(doy), 
+             family = gaussian(link = log),
+             data = ozone,
+             aViz = list(nsim = 50))
+
+print(plot(ozone_gam, allTerms = TRUE), pages = 1) # plot() calls plot.gamViz(). See ?plot.gamViz
+```
+
+- Check the model residuals
+
+```{r check-model-residuals}
+qq(ozone_gam)
+check(ozone_gam)
+```
+
+- Refit using a gamma distribution, does this improve fit?
+
+```{r gamma-ozone-fit}
+ozone_gam_gamma <- gamV(O3 ~ s(vh) + s(wind) + s(humidity) + s(temp) + s(ibh) + s(dpg) + s(ibt) + s(vis) + s(doy), 
+             family = Gamma(link = log),
+             data = ozone,
+             aViz = list(nsim = 50))
+
+check(ozone_gam_gamma)
+```
+
+- Fit alternative model with an indentity-link
+
+```{r gamma-identity-link}
+ozone_gam_gamma_id <- gamV(O3 ~ s(vh) + s(wind) + s(humidity) + s(temp) + s(ibh) + s(dpg) + s(ibt) + s(vis) + s(doy), 
+             family = Gamma(link = identity),
+             data = ozone,
+             aViz = list(nsim = 50))
+
+AIC(ozone_gam_gamma, ozone_gam_gamma_id)
+```
+
+- Plot the smoothed effects
+
+```{r plot-smoothed-effects}
+print(plot(ozone_gam_gamma, allTerms = TRUE), pages = 1) 
+
+summary(ozone_gam_gamma)
+```
+
+- Simplify the model using p value selection (bad)
+
+```{r p-value restricted model}
+ozone_gam_gamma_rest <- gamV(O3 ~ s(vh) + s(wind) + s(temp) + s(ibh) + s(dpg) + s(vis) + s(doy), 
+             family = Gamma(link = identity),
+             data = ozone,
+             aViz = list(nsim = 50))
+
+AIC(ozone_gam_gamma_id, ozone_gam_gamma_rest)
+```
+
+
+- Interpret the smoothed effects, Q example of interpreting this?
+
+```{r interpret-effects}
+print(plot(ozone_gam_gamma_rest, allTerms = TRUE), pages = 1) 
+```
+
+# Bone mineral density modelling
+
+- Get the calcium data
+
+```{r get-cal-data}
+load("../workshop_JGI_2018/exercises/data/calcium.rda")
+```
+
+- Fit a simple model with `bmd` as the reponse and linear effects for `age` and `groups`.
+
+```{r fit-baseline-cal-model}
+linear_gam <- gamV(bmd ~ group + age, data = calcium, aViz = list(nsim = 100))
+
+summary(linear_gam)
+```
+
+- Check residuals if to see in mean depends on the subject
+
+```{r check-baseline-residuals}
+check1D(linear_gam, calcium$person) + l_gridCheck1D(mean)
+```
+
+- Add random effect for subjects
+
+```{r add-random-effect}
+cal_rf_per <- gamV(bmd ~ group + age + s(person, bs = "re"), 
+                   data = calcium, 
+                   aViz = list(nsim = 100))
+check1D(cal_rf_per, calcium$person) + l_gridCheck1D(mean)
+summary(cal_rf_per)
+```
+
+- Add a smooth effect for age and compare using AIC
+
+```{r smooth-age}
+col_age_smooth <- gamV(bmd ~ group + s(age) + s(person, bs = "re"), data = calcium)
+
+print(plot(col_age_smooth, allTerms = T), pages = 1)
+```
+
+- Check to see if age impact is different between age group using a by factor.
+
+```{r within-group-age}
+col_age_smooth_by_age <- gamV(bmd ~ group + s(age, by = group) + s(person, bs = "re"), data = calcium)
+
+print(plot(col_age_smooth_by_age, allTerms = T), pages = 1)
+```
+
+- Look at model differences
+
+```{r plotdiffs}
+plotDiff(sm(col_age_smooth_by_age, 1),
+         sm(col_age_smooth_by_age, 2)) + l_fitLine() + l_ciLine()
+```
+
+# Forecasting electricity demand on GEFCOM2014 data
+
+- Get the GEF com 2014 data
+
+```{r get-gef-data}
+load("../workshop_JGI_2018/exercises/data/gefcom_small.rda")
+```
+
+- Fit a Guassian GAM, with smooth effects for some variables and parameteric effects for others.
+
+
+```{r fit-baseline-gef-model}
+baseline_gef <- gamV(NetDemand ~ NetDemand.24 + Dow + Trend + s(wM) + s(wM_s95) + s(Posan, bs = "cc"), 
+             data = gefcom_small, aViz = list(nsim = 50))
+
+print(plot(baseline_gef, allTerms = TRUE), pages = 1)
+```
+
+- Check the mean of residuals depending on Trend. 
+
+```{r check-trend-residuals}
+check1D(baseline_gef, "Trend") + l_gridCheck1D()
+```
+
+```{r check-k-values}
+check(baseline_gef)
+```
+
+- Refit the model the model with a smoothed effect for trend and a increased basis dimension for all spline variables. Compare via AIC and check residuals. Recheck basis dimensions using check.
+
+```{r}
+gef_smooth <- gamV(NetDemand ~ NetDemand.24 + Dow + s(Trend, k = 6) + s(wM, k = 20) + 
+             s(wM_s95, k = 15) + s(Posan, k = 15, bs = "cc"),
+             data = gefcom_small, 
+             aViz = list(nsim = 50))
+
+AIC(baseline_gef, gef_smooth)
+
+check1D(gef_smooth, "Trend") + l_gridCheck1D()
+
+check(gef_smooth)
+```
+
+- Check qq plot
+
+```{r gef-qq}
+qq(gef_smooth)
+```
+
+- Refit using a scaled students T distribution.
+
+```{r scaled-student}
+gef_scat <- gamV(NetDemand ~ NetDemand.24 + Dow + s(Trend, k = 6) + s(wM, k = 20) + 
+             s(wM_s95, k = 15) + s(Posan, k = 15, bs = "cc"), data = gefcom_small, 
+             family = scat,
+             aViz = list(nsim = 50))
+
+AIC(gef_smooth, gef_scat)
+
+qq(gef_scat)
+```
+
+- Consider log link
+
+```{r}
+gef_scat_log <- gamV(NetDemand ~ NetDemand.24 + Dow + s(Trend, k = 6) + s(wM, k = 20) + 
+             s(wM_s95, k = 15) + s(Posan, k = 15, bs = "cc"), 
+             data = gefcom_small, 
+             family = scat(link = log),
+             aViz = list(nsim = 50))
+
+AIC(gef_scat, gef_scat_log)
+
+print(plot(gef_scat_log, allTerms = TRUE), pages = 1)
+```

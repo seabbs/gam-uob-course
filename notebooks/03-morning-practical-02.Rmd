@@ -1,0 +1,207 @@
+---
+title: "Morning Practicals: Session 2"
+output: html_notebook
+---
+
+# $CO_2$ Modelling
+
+- Load the packages and data
+
+```{r}
+library(mgcv); library(gamair); 
+data(co2s)
+```
+
+- Plot the data
+
+```{r}
+library(tidyverse)
+ggplot(co2s, aes(c.month, co2)) +
+  geom_line() +
+  theme_minimal()
+```
+
+- Fit the GAM model
+
+```{r}
+baseline_gam <- gam(co2 ~ s(c.month, bs = "cr", k = 100), data = co2s)
+```
+
+- Make predictions
+
+```{r}
+pred_plot <- function(df, model) {
+  
+  preds <- predict(model ,data.frame(c.month=1:543,
+                                month=c(rep(1:12,45),1:3)),
+                   se=TRUE)
+  
+  out <- tibble(fit = preds$fit) %>% 
+    mutate(
+        ul = fit + 2*preds$se,
+        ll = fit - 2*preds$se,
+        c.month = 1:543
+    )
+
+
+  ggplot(df, aes(c.month, co2)) +
+  geom_point(size = 1.2, alpha = 0.6) +
+  geom_line(data = out, aes(y = fit), col = "red", alpha = 0.6) +
+  geom_ribbon(data = out, 
+              aes(x = c.month, y = fit, ymin = ll, ymax = ul),
+              col = "red", alpha = 0.2) +
+  theme_minimal() 
+
+}
+
+pred_plot(co2s, baseline_gam)
+```
+
+- Fit a model with smooth functions for c.month and month (i.e months with a season effect). Use a high diemnsion for f1 and a cyclic basis for f2. Need to set knots for month to force seasons to line up correctly.
+
+```{r seasonal-gam}
+seasonal_gam <- gam(co2 ~ s(c.month, bs = "cr",k = 50) + s(month,bs = "cc"),
+                    data=co2s,
+          knots=list(month=c(1,13)))
+
+
+```
+
+- Plot seasonal predictions
+
+```{r seasonal-predictions}
+pred_plot(co2s, seasonal_gam)
+```
+
+- Short term seasonality has been seperated from long term trends. This improves the extraplotion of longer term trends
+
+# Individual electricity demand modelling solution
+
+- Load the data and fit a basic model
+
+```{r load-data-fit-gam}
+load( "../workshop_JGI_2018/exercises/data/Ind_elect.rda") 
+
+fit1 <- bamV(load ~ dow + ID + s(instant) + s(temp) + s(day), data = indElec, 
+             aViz = list(nsim = 50))
+
+print(plot(fit1, allTerms = TRUE), pages = 1)
+```
+
+- Get model summary
+
+```{r model-summary}
+summary(fit1)
+```
+
+- Check residuals across variables
+
+```{r}
+pl <- list()
+pl[[1]] <- check2D(fit1, "instant", "ID") + l_gridCheck2D(bw = c(NA, 1))
+pl[[2]] <- check2D(fit1, "temp", "ID") + l_gridCheck2D(bw = c(NA, 1))
+pl[[3]] <- check2D(fit1, "day", "ID") + l_gridCheck2D(bw = c(NA, 5))
+
+library(gridExtra)
+grid.arrange(grobs = lapply(pl, "[[", "ggObj"), ncol = 2)
+```
+
+- Explore problematic customers. Looks like using storage heaters?
+
+```{r}
+in27 <- which(indElec$ID == 27)
+par(mfrow = c(1, 2))
+plot(indElec$instant[in27], indElec$load[in27])
+plot(indElec$temp[in27], indElec$load[in27])
+```
+
+- Fit a model using BAM for individual variation
+
+```{r fit-bam-model}
+fit2 <- bamV(load ~ dow + ID + 
+                    s(instant, by = ID, id = 1) + 
+                    s(temp, by = ID, id = 2) + 
+                    s(day, by = ID, id = 3), data = indElec, 
+             aViz = list(nsim = 50), aGam = list(discrete = TRUE))
+
+summary(fit2)
+```
+
+- Check AIC
+
+```{r}
+AIC(fit1, fit2)
+```
+
+- Repeat residual checks
+
+```{r}
+pl <- list()
+pl[[1]] <- check2D(fit2, "instant", "ID") + l_gridCheck2D(bw = c(NA, 1))
+pl[[2]] <- check2D(fit2, "temp", "ID") + l_gridCheck2D(bw = c(NA, 1))
+pl[[3]] <- check2D(fit2, "day", "ID") + l_gridCheck2D(bw = c(NA, 5))
+
+library(gridExtra)
+grid.arrange(grobs = lapply(pl, "[[", "ggObj"), ncol = 2)
+```
+
+- Check basis functions. Basis for day and instant may be too small.
+
+```{r}
+check(fit2)
+```
+
+- Increase dimension and refit
+
+```{r}
+fit3 <- bamV(load ~ dow + ID + 
+                    s(instant, by = ID, id = 1, k = 20) + 
+                    s(temp, by = ID, id = 2) + 
+                    s(day, by = ID, id = 3, k = 20), data = indElec, 
+             aViz = list(nsim = 50), aGam = list(discrete = TRUE))
+
+AIC(fit2, fit3)
+```
+
+- Check dimensions again
+
+```{r}
+check(fit3)
+```
+
+- Check relationship between individuals, load and relationship.
+
+```{r}
+check2D(fit3, indElec$load48SM, indElec$ID) + l_gridCheck2D(bw = c(NA, 0.1))
+```
+
+- Include interaction for smoothed lagged load and refit model
+
+```{r}
+fit4 <- bamV(load ~ dow + ID + 
+                    s(instant, by = ID, id = 1, k = 20) + 
+                    s(temp, by = ID, id = 2) + 
+                    s(day, by = ID, id = 3, k = 20) + 
+                    s(load48SM, by = ID, id = 4), data = indElec, 
+             aViz = list(nsim = 50), aGam = list(discrete = TRUE))
+
+AIC(fit3, fit4)
+```
+
+- Check predictions on individual customers
+
+```{r}
+par(mfrow = c(3, 3), mar = c(2.1, 4.1, 1.1, 2.1))
+for(ID in 1:9){
+  ids <- which( indElec$ID == ID )
+  subD <- indElec[ids, ]
+  subP <- fit4$fitted.values[ids]
+  
+  kk <- 1:200
+  plot(subD$load[kk])
+  lines(subP[kk], col = 2)
+}
+
+```
+
+- Model is not going a good job at predicting peaks in demand in general. It is doing a particularly poor job for customer number 3.

@@ -1,0 +1,20 @@
+---
+title: "Smooth effects and Big data"
+output: html_notebook
+---
+
+# Recap
+
+- Models fitted using penalized log-likelihood
+
+# Model fitting
+
+- Use a hierarchical fitting framework
+- Variance parameters of random effect can be incluedd in model fitting
+- Smooths in gam are highly generalised and include all GLM parameter types + multiple tpyes of splines
+- Cyclic basis can be used for rotating signals
+- Read simon woods book
+
+# Big data methods
+
+- handles matrix algebra differently. Performing calculations on sub-blocks rather than on the complete matrix.

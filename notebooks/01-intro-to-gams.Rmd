@@ -1,0 +1,34 @@
+---
+title: "Introduction to GAMs"
+subtitle: University of Bristol
+date: "27/06/18"
+output: html_notebook
+---
+
+# What is an additive model?
+
+- In a typical regression setting the mean of the outcome depends on the covariates
+- Variance is considered to be constant (i.e not a function of the covariates)
+- Additive is modelling by adding a series of functions together, a generalisation of other regression techniques
+- Fitted by maximising the penalized log-likelihood
+- Beyond gaussian models distribution can be anything, with at least one parameter depending on the covariates
+- Additionally can use additional parameters on both the scale and the shape.
+
+# Introducing smoothing effects 
+
+- For example could add adjustment for continous fixed effects, binary fixed effects aand a non-linaer smooth function (i.e a spline)
+- Generalise to n dimensions
+- Determine complexity using r (number of basis functions) for sufficient flexibility and a a complexity penalty on beta to control the number of degreees of freedom.
+
+# Introducing Random Effects
+
+- i.e multilevel model
+- Clustering of measurements for individuals etc.
+- Random intercept or slope for a cluster
+
+# Diagnostic and model selection tools
+
+- QQ plots to check linear assumptions. Helpful to choose model type. Not useful for evaluating omitted variables and non-linearities
+- Conditional residual checks: simulation of residuals from the model and compare to actual mean residuals
+- Choose k via model selection criteria. P value test for smooth effect inclusion?
+- AIC, BIC etc.
